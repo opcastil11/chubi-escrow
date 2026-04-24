@@ -52,4 +52,6 @@ pub enum ChubiError {
     FeeRecipientMismatch,     // 6023
     #[msg("Market time has passed")]
     MarketExpired,            // 6024
+    #[msg("Entry weight dropped below min_weight before the deposit landed")]
+    WeightSlippage,           // 6025
 }

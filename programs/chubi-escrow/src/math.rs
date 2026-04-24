@@ -9,9 +9,8 @@ use anchor_lang::prelude::*;
 /// Formula: weight = FLOOR + (PRECISION - FLOOR) * fraction^exp / PRECISION^(exp-1)
 ///
 /// Exponent selected by market duration:
-///   < 30 min  → 1 (linear)
-///   < 4 hours → 2 (quadratic)
-///   >= 4 hours → 3 (cubic)
+///   < 30 min  → 1 (linear)    — speed matches; full timeline is short anyway
+///   >= 30 min → 2 (quadratic) — every other market
 ///
 /// Returns weight in [MIN_WEIGHT_FLOOR, PRECISION].
 pub fn compute_entry_weight(
@@ -32,17 +31,9 @@ pub fn compute_entry_weight(
     let frac_pow = if resolution_duration < SHORT_DURATION_SECS {
         // Exponent 1: linear
         frac
-    } else if resolution_duration < MID_DURATION_SECS {
-        // Exponent 2: quadratic
-        // frac^2 / PRECISION
-        frac.checked_mul(frac).ok_or(error!(ChubiError::MathOverflow))?
-            .checked_div(p).ok_or(error!(ChubiError::MathOverflow))?
     } else {
-        // Exponent 3: cubic
-        // frac^3 / PRECISION^2
+        // Exponent 2: quadratic — frac^2 / PRECISION
         frac.checked_mul(frac).ok_or(error!(ChubiError::MathOverflow))?
-            .checked_div(p).ok_or(error!(ChubiError::MathOverflow))?
-            .checked_mul(frac).ok_or(error!(ChubiError::MathOverflow))?
             .checked_div(p).ok_or(error!(ChubiError::MathOverflow))?
     };
 
@@ -443,11 +434,22 @@ mod tests {
 
     #[test]
     fn weight_midpoint_long_market() {
-        // 24-hour market, 50% remaining, exponent=3 (cubic)
-        // frac^3/P^2 = 500000^3/1000000^2 = 125000
-        // weight = 300_000 + 700_000 * 125000 / 1000000 = 387_500
+        // 24-hour market, 50% remaining, exponent=2 (quadratic)
+        // Unified: all markets >= 30min use the same quadratic curve.
+        // frac^2/P = 500000^2/1000000 = 250000
+        // weight = 300_000 + 700_000 * 250000 / 1000000 = 475_000
         let w = compute_entry_weight(500_000, 86400).unwrap();
-        assert_eq!(w, 387_500);
+        assert_eq!(w, 475_000);
+    }
+
+    #[test]
+    fn weight_midpoint_week_market() {
+        // 7-day market, 50% remaining — same curve as the 24h case.
+        // Regression for the cubic-cliff bug: pre-unification this returned 387_500,
+        // which (combined with the frontend still showing the quadratic value) meant
+        // users deposited expecting ~0.475x weight and received ~0.388x on-chain.
+        let w = compute_entry_weight(500_000, 604_800).unwrap();
+        assert_eq!(w, 475_000);
     }
 
     #[test]

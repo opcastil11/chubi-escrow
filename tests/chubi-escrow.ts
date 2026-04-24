@@ -120,7 +120,9 @@ describe("chubi-escrow", () => {
     );
 
     await program.methods
-      .deposit(side, new BN(amountLamports))
+      // min_weight=0 → slippage guard disabled in tests (weight is whatever
+      // the clock produces; tests are deterministic).
+      .deposit(side, new BN(amountLamports), new BN(0))
       .accounts({
         market: marketPDA,
         vault: vaultPDA,

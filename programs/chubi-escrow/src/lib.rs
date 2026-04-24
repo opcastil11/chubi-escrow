@@ -9,7 +9,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("Fkdc1GWARKGdCtrDxAZmaC1xiLaaZ2LMgyS5gBGkCoAx");
+declare_id!("DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ");
 
 #[program]
 pub mod chubi_escrow {
@@ -32,8 +32,11 @@ pub mod chubi_escrow {
     }
 
     /// Deposit SOL into a market side. Entry weight computed on-chain.
-    pub fn deposit(ctx: Context<Deposit>, side: u8, amount: u64) -> Result<()> {
-        instructions::deposit::handler(ctx, side, amount)
+    /// `min_weight` is a slippage guard: revert if the computed entry weight
+    /// (after any lockout / fraction_remaining drift) is below this value.
+    /// Pass 0 to disable the guard.
+    pub fn deposit(ctx: Context<Deposit>, side: u8, amount: u64, min_weight: u64) -> Result<()> {
+        instructions::deposit::handler(ctx, side, amount, min_weight)
     }
 
     /// Permissionless resolution — anyone can call after market expires.

@@ -37,7 +37,9 @@ pub const MAX_SIDES: usize = 6;
 pub const MIN_DURATION_SECS: i64 = 600; // 10 minutes
 pub const MAX_DURATION_SECS: i64 = 604_800; // 7 days
 
-/// Duration thresholds for entry weight exponent selection (seconds).
+/// Duration threshold for entry weight exponent selection (seconds).
+/// Markets shorter than this use linear decay; longer markets use quadratic.
+/// (Cubic decay was removed: it produced near-floor weight by the market midpoint
+///  on multi-day markets, killing late-entry economics.)
 pub const SHORT_DURATION_SECS: i64 = 1_800; // 30 min — exponent 1
-pub const MID_DURATION_SECS: i64 = 14_400; // 4 hours — exponent 2
-// >= 4 hours: exponent 3
+// >= 30 min: exponent 2 (quadratic)

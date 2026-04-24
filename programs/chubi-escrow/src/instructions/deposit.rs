@@ -43,7 +43,7 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Deposit>, side: u8, amount: u64) -> Result<()> {
+pub fn handler(ctx: Context<Deposit>, side: u8, amount: u64, min_weight: u64) -> Result<()> {
     let market = &mut ctx.accounts.market;
     let now = Clock::get()?.unix_timestamp;
 
@@ -72,6 +72,13 @@ pub fn handler(ctx: Context<Deposit>, side: u8, amount: u64) -> Result<()> {
 
     // ── Compute entry weight ──
     let entry_weight = math::compute_entry_weight(fraction_remaining, market.resolution_duration)?;
+
+    // ── Slippage guard ──
+    // `min_weight = 0` means "no guard". Callers should pass the weight they
+    // showed to the user minus a small tolerance (e.g. 2%). If the lockout clock
+    // or another deposit landed first and dropped the weight below that, revert
+    // instead of silently giving a worse position.
+    require!(entry_weight >= min_weight, ChubiError::WeightSlippage);
 
     // ── Transfer SOL: maker → vault ──
     system_program::transfer(
