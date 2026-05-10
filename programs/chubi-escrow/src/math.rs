@@ -279,7 +279,11 @@ pub fn compute_twcd(
 
 // ─── Payout Computation ────────────────────────────────────────────────────
 
-/// Compute payout for a winning position. Returns (payout, fee).
+/// Compute payout for a winning position. Returns (payout, protocol_fee, creator_fee).
+///
+/// `creator_fee_bps` is 0 for legacy markets with no CreatorAccount side-car;
+/// for new markets it should be `CREATOR_FEE_BPS` (50 = 0.5%). Both fees are
+/// charged on `gross_profit` only, so losers and break-even winners pay nothing.
 pub fn compute_winner_payout(
     amount: u64,
     entry_weight: u64,
@@ -288,7 +292,8 @@ pub fn compute_winner_payout(
     weighted_pools: &[u128; MAX_SIDES],
     winner_payout_share: u64,
     total_distributable: u64,
-) -> Result<(u64, u64)> {
+    creator_fee_bps: u64,
+) -> Result<(u64, u64, u64)> {
     let ws = winner_side as usize;
 
     // winner_pool_amount = total_distributable * winner_payout_share / PRECISION
@@ -300,7 +305,7 @@ pub fn compute_winner_payout(
     let total_winner_weighted = weighted_pools[ws];
 
     if total_winner_weighted == 0 {
-        return Ok((0, 0));
+        return Ok((0, 0, 0));
     }
 
     let profit_pool = winner_pool.saturating_sub(winner_investment);
@@ -320,20 +325,26 @@ pub fn compute_winner_payout(
             .checked_mul(PROTOCOL_FEE_BPS as u128).ok_or(error!(ChubiError::MathOverflow))?
             .checked_div(BPS_SCALE as u128).ok_or(error!(ChubiError::MathOverflow))? as u64;
 
+        // creator_fee = gross_profit * creator_fee_bps / BPS_SCALE
+        let creator_fee = (gross_profit as u128)
+            .checked_mul(creator_fee_bps as u128).ok_or(error!(ChubiError::MathOverflow))?
+            .checked_div(BPS_SCALE as u128).ok_or(error!(ChubiError::MathOverflow))? as u64;
+
         let payout = amount
             .checked_add(gross_profit).ok_or(error!(ChubiError::MathOverflow))?
-            .checked_sub(fee).ok_or(error!(ChubiError::MathOverflow))?;
+            .checked_sub(fee).ok_or(error!(ChubiError::MathOverflow))?
+            .checked_sub(creator_fee).ok_or(error!(ChubiError::MathOverflow))?;
 
-        Ok((payout, fee))
+        Ok((payout, fee, creator_fee))
     } else {
         // Rare edge: winner pool < winner investment. Scale down proportionally.
         if winner_investment == 0 {
-            return Ok((0, 0));
+            return Ok((0, 0, 0));
         }
         let payout = (winner_pool as u128)
             .checked_mul(amount as u128).ok_or(error!(ChubiError::MathOverflow))?
             .checked_div(winner_investment as u128).ok_or(error!(ChubiError::MathOverflow))? as u64;
-        Ok((payout, 0))
+        Ok((payout, 0, 0))
     }
 }
 
@@ -543,38 +554,66 @@ mod tests {
 
     #[test]
     fn winner_payout_basic() {
-        // Single winner: 100 lamports, weight 1M
-        // total_distributable = 200, winner_payout_share = 700_000 (70%)
-        // winner_pool = 200 * 700_000 / 1M = 140
-        // profit_pool = 140 - 100 = 40
-        // gross_profit = 40 * (100*1M) / (100*1M) = 40
-        // fee = 40 * 200 / 10_000 = 0 (integer truncation: 0.8 → 0)
-        // payout = 100 + 40 - 0 = 140
+        // Legacy market (no creator): single winner 100 lamports, weight 1M
+        // gross_profit = 40, protocol_fee = 0 (truncated), creator_fee = 0
+        // payout = 100 + 40 - 0 - 0 = 140
         let pools = [100, 100, 0, 0, 0, 0];
         let weighted = [100_000_000u128, 100_000_000, 0, 0, 0, 0];
-        let (payout, fee) = compute_winner_payout(
-            100, 1_000_000, 0, &pools, &weighted, 700_000, 200,
+        let (payout, fee, creator_fee) = compute_winner_payout(
+            100, 1_000_000, 0, &pools, &weighted, 700_000, 200, 0,
         ).unwrap();
         assert_eq!(payout, 140);
-        assert_eq!(fee, 0); // 0.8 lamports truncated
+        assert_eq!(fee, 0);
+        assert_eq!(creator_fee, 0);
     }
 
     #[test]
     fn winner_payout_with_fee() {
-        // Larger amounts to see fee
-        // 1_000_000 lamports, weight 1M, total_dist=2M, wps=700_000
-        // winner_pool = 1_400_000
-        // profit = 400_000
-        // gross = 400_000
-        // fee = 400_000 * 200 / 10_000 = 8_000
+        // Legacy market: 1_000_000 lamports, gross=400_000
+        // protocol_fee = 8_000 (2%), creator_fee = 0
         // payout = 1_000_000 + 400_000 - 8_000 = 1_392_000
         let pools = [1_000_000, 1_000_000, 0, 0, 0, 0];
         let weighted = [1_000_000_000_000u128, 1_000_000_000_000, 0, 0, 0, 0];
-        let (payout, fee) = compute_winner_payout(
-            1_000_000, 1_000_000, 0, &pools, &weighted, 700_000, 2_000_000,
+        let (payout, fee, creator_fee) = compute_winner_payout(
+            1_000_000, 1_000_000, 0, &pools, &weighted, 700_000, 2_000_000, 0,
         ).unwrap();
         assert_eq!(payout, 1_392_000);
         assert_eq!(fee, 8_000);
+        assert_eq!(creator_fee, 0);
+    }
+
+    #[test]
+    fn winner_payout_with_creator_fee() {
+        // Same as winner_payout_with_fee, but with creator fee enabled (50 bps).
+        // gross = 400_000
+        // protocol_fee = 400_000 * 200 / 10_000 = 8_000
+        // creator_fee = 400_000 * 50 / 10_000 = 2_000
+        // payout = 1_000_000 + 400_000 - 8_000 - 2_000 = 1_390_000
+        let pools = [1_000_000, 1_000_000, 0, 0, 0, 0];
+        let weighted = [1_000_000_000_000u128, 1_000_000_000_000, 0, 0, 0, 0];
+        let (payout, fee, creator_fee) = compute_winner_payout(
+            1_000_000, 1_000_000, 0, &pools, &weighted, 700_000, 2_000_000, CREATOR_FEE_BPS,
+        ).unwrap();
+        assert_eq!(payout, 1_390_000);
+        assert_eq!(fee, 8_000);
+        assert_eq!(creator_fee, 2_000);
+        // Sanity: total deducted = 2.5% of profit
+        assert_eq!(fee + creator_fee, 10_000);
+    }
+
+    #[test]
+    fn winner_payout_break_even_no_creator_fee() {
+        // When profit_pool is 0 (winner already had > pool share), no fees apply
+        // even with creator_fee_bps set — there's nothing to take a cut of.
+        let pools = [1_000_000, 0, 0, 0, 0, 0];
+        let weighted = [1_000_000_000_000u128, 0, 0, 0, 0, 0];
+        let (payout, fee, creator_fee) = compute_winner_payout(
+            1_000_000, 1_000_000, 0, &pools, &weighted, PRECISION, 1_000_000, CREATOR_FEE_BPS,
+        ).unwrap();
+        // winner_pool = 1M, winner_investment = 1M, profit = 0 → fall through scaling branch
+        assert_eq!(payout, 1_000_000);
+        assert_eq!(fee, 0);
+        assert_eq!(creator_fee, 0);
     }
 
     // ── Loser Payout ──

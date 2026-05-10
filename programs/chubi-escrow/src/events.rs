@@ -8,6 +8,10 @@ pub struct MarketCreated {
     pub resolution_duration: i64,
     pub allow_withdrawal: bool,
     pub enable_lockout: bool,
+    /// The wallet that originally requested the market (and earns the 0.5%
+    /// creator commission). Pubkey::default() when no creator was supplied —
+    /// in that case no CreatorAccount side-car is created.
+    pub creator: Pubkey,
 }
 
 #[event]
@@ -38,8 +42,18 @@ pub struct PayoutClaimed {
     pub maker: Pubkey,
     pub nonce: u64,
     pub payout: u64,
+    /// Protocol fee deducted from this payout (2% of profit).
     pub fee: u64,
+    /// Creator commission deducted from this payout (0.5% of profit, 0 if no creator).
+    pub creator_fee: u64,
     pub is_winner: bool,
+}
+
+#[event]
+pub struct CreatorFeesClaimed {
+    pub market_id: String,
+    pub creator: Pubkey,
+    pub amount: u64,
 }
 
 #[event]

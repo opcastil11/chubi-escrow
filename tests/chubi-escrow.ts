@@ -50,6 +50,13 @@ describe("chubi-escrow", () => {
     );
   }
 
+  function getCreatorPDA(marketPubkey: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("creator"), marketPubkey.toBuffer()],
+      program.programId
+    );
+  }
+
   // Helper: airdrop SOL
   async function airdrop(pubkey: PublicKey, amount: number) {
     const sig = await provider.connection.requestAirdrop(
@@ -74,15 +81,18 @@ describe("chubi-escrow", () => {
       numSides?: number;
       allowWithdrawal?: boolean;
       enableLockout?: boolean;
+      creator?: PublicKey;
     } = {}
   ) {
     const duration = opts.duration ?? 600; // 10 min default
     const numSides = opts.numSides ?? 2;
     const allowWithdrawal = opts.allowWithdrawal ?? false;
     const enableLockout = opts.enableLockout ?? false;
+    const creator = opts.creator ?? PublicKey.default;
 
     const [marketPDA] = getMarketPDA(marketId);
     const [vaultPDA] = getVaultPDA(marketPDA);
+    const [creatorPDA] = getCreatorPDA(marketPDA);
 
     await program.methods
       .createMarket(
@@ -91,16 +101,18 @@ describe("chubi-escrow", () => {
         numSides,
         allowWithdrawal,
         enableLockout,
-        authority.publicKey // fee_recipient = authority for tests
+        authority.publicKey, // fee_recipient = authority for tests
+        creator
       )
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
+        creatorAccount: creatorPDA,
         authority: authority.publicKey,
       })
       .rpc();
 
-    return { marketPDA, vaultPDA };
+    return { marketPDA, vaultPDA, creatorPDA };
   }
 
   // Helper: deposit as a specific user
@@ -275,6 +287,7 @@ describe("chubi-escrow", () => {
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
+        creatorAccount: getCreatorPDA(marketPDA)[0],
         position: winPos,
         maker: winner.publicKey,
       })
@@ -299,7 +312,8 @@ describe("chubi-escrow", () => {
         .accounts({
           market: marketPDA,
           vault: vaultPDA,
-          position: losePos,
+          creatorAccount: getCreatorPDA(marketPDA)[0],
+        position: losePos,
           maker: loser.publicKey,
         })
         .signers([loser])
@@ -345,6 +359,7 @@ describe("chubi-escrow", () => {
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
+        creatorAccount: getCreatorPDA(marketPDA)[0],
         position: pos1,
         maker: maker1.publicKey,
       })
@@ -358,7 +373,8 @@ describe("chubi-escrow", () => {
         .accounts({
           market: marketPDA,
           vault: vaultPDA,
-          position: pos1,
+          creatorAccount: getCreatorPDA(marketPDA)[0],
+        position: pos1,
           maker: maker1.publicKey,
         })
         .signers([maker1])
@@ -435,6 +451,7 @@ describe("chubi-escrow", () => {
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
+        creatorAccount: getCreatorPDA(marketPDA)[0],
         position: pos,
         maker: maker1.publicKey,
       })
@@ -613,6 +630,7 @@ describe("chubi-escrow", () => {
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
+        creatorAccount: getCreatorPDA(marketPDA)[0],
         position: p3,
         maker: m3.publicKey,
       })
@@ -649,6 +667,7 @@ describe("chubi-escrow", () => {
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
+        creatorAccount: getCreatorPDA(marketPDA)[0],
         position: p1,
         maker: m1.publicKey,
       })

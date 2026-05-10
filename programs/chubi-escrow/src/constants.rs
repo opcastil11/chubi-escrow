@@ -4,6 +4,11 @@ pub const PRECISION: u64 = 1_000_000;
 /// Protocol fee: 2% on winner profits only.
 pub const PROTOCOL_FEE_BPS: u64 = 200;
 
+/// Creator commission: 0.5% on winner profits only. Only applied when the
+/// market has a CreatorAccount side-car PDA — legacy markets created before
+/// this feature shipped have no creator account and pay only PROTOCOL_FEE_BPS.
+pub const CREATOR_FEE_BPS: u64 = 50;
+
 /// Basis-point scale (10_000 = 100%).
 pub const BPS_SCALE: u64 = 10_000;
 

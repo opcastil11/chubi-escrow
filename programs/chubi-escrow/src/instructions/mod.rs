@@ -8,6 +8,7 @@ pub mod invalidate;
 pub mod refund;
 pub mod close_position;
 pub mod collect_fees;
+pub mod claim_creator_fees;
 
 #[allow(ambiguous_glob_reexports)]
 pub use create_market::*;
@@ -20,3 +21,4 @@ pub use invalidate::*;
 pub use refund::*;
 pub use close_position::*;
 pub use collect_fees::*;
+pub use claim_creator_fees::*;

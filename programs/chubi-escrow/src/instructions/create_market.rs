@@ -24,6 +24,23 @@ pub struct CreateMarket<'info> {
     )]
     pub vault: SystemAccount<'info>,
 
+    /// Optional creator side-car account. The authority always pays the rent
+    /// (because the creator does not sign this tx). When `creator` arg is
+    /// `Pubkey::default()`, the caller passes a placeholder System account
+    /// with the canonical seeds and `init` is skipped via the init_if_needed
+    /// pattern below — but we want determinism, so we ALWAYS init this and
+    /// store `Pubkey::default()` for anonymous markets. Downstream code
+    /// (claim_payout) checks `creator != Pubkey::default()` to decide whether
+    /// to charge the creator fee.
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + CreatorAccount::INIT_SPACE,
+        seeds = [b"creator", market.key().as_ref()],
+        bump,
+    )]
+    pub creator_account: Account<'info, CreatorAccount>,
+
     #[account(mut)]
     pub authority: Signer<'info>,
 
@@ -38,6 +55,7 @@ pub fn handler(
     allow_withdrawal: bool,
     enable_lockout: bool,
     fee_recipient: Pubkey,
+    creator: Pubkey,
 ) -> Result<()> {
     require!(market_id.len() <= MAX_MARKET_ID_LEN, ChubiError::MarketIdTooLong);
     require!(
@@ -78,6 +96,13 @@ pub fn handler(
     market.protocol_fee_collected = 0;
     market.fee_recipient = fee_recipient;
 
+    let creator_account = &mut ctx.accounts.creator_account;
+    creator_account.bump = ctx.bumps.creator_account;
+    creator_account.market = market.key();
+    creator_account.creator = creator;
+    creator_account.fee_collected = 0;
+    creator_account.fee_claimed = 0;
+
     emit!(events::MarketCreated {
         market_id,
         authority: market.authority,
@@ -85,6 +110,7 @@ pub fn handler(
         resolution_duration,
         allow_withdrawal,
         enable_lockout,
+        creator,
     });
 
     Ok(())

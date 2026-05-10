@@ -69,6 +69,25 @@ pub struct MarketState {
     pub fee_recipient: Pubkey,
 }
 
+// ─── Creator (side-car PDA) ────────────────────────────────────────────────
+//
+// One per market, seeds = ["creator", market.key()]. Holds the creator wallet
+// + accumulated 0.5% commission earned from winner profits. Created by
+// create_market when a non-default `creator` is passed; markets without one
+// (legacy or anonymous) skip the creator-fee math entirely.
+
+#[account]
+#[derive(InitSpace)]
+pub struct CreatorAccount {
+    pub bump: u8,
+    pub market: Pubkey,
+    pub creator: Pubkey,
+    /// Lamports earned but not yet swept by the creator.
+    pub fee_collected: u64,
+    /// Lifetime running total of fees swept (for telemetry / display).
+    pub fee_claimed: u64,
+}
+
 // ─── Position ──────────────────────────────────────────────────────────────
 
 #[account]

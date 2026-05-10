@@ -15,7 +15,9 @@ declare_id!("DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ");
 pub mod chubi_escrow {
     use super::*;
 
-    /// Create a new conviction market with vault PDA.
+    /// Create a new conviction market with vault PDA + creator side-car.
+    /// Pass `creator = Pubkey::default()` for anonymous markets that don't
+    /// pay a creator commission (e.g. seed/system markets).
     pub fn create_market(
         ctx: Context<CreateMarket>,
         market_id: String,
@@ -24,10 +26,11 @@ pub mod chubi_escrow {
         allow_withdrawal: bool,
         enable_lockout: bool,
         fee_recipient: Pubkey,
+        creator: Pubkey,
     ) -> Result<()> {
         instructions::create_market::handler(
             ctx, market_id, resolution_duration, num_sides,
-            allow_withdrawal, enable_lockout, fee_recipient,
+            allow_withdrawal, enable_lockout, fee_recipient, creator,
         )
     }
 
@@ -78,5 +81,11 @@ pub mod chubi_escrow {
     /// Authority sweeps accumulated protocol fees from vault.
     pub fn collect_fees(ctx: Context<CollectFees>) -> Result<()> {
         instructions::collect_fees::handler(ctx)
+    }
+
+    /// Creator sweeps accumulated 0.5% commission from vault → creator wallet.
+    /// Reverts if signer != creator stored on the side-car.
+    pub fn claim_creator_fees(ctx: Context<ClaimCreatorFees>) -> Result<()> {
+        instructions::claim_creator_fees::handler(ctx)
     }
 }

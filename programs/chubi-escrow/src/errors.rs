@@ -54,4 +54,10 @@ pub enum ChubiError {
     MarketExpired,            // 6024
     #[msg("Entry weight dropped below min_weight before the deposit landed")]
     WeightSlippage,           // 6025
+    #[msg("Signer is not the creator of this market")]
+    NotCreator,               // 6026
+    #[msg("No creator fees available to claim")]
+    NoCreatorFees,            // 6027
+    #[msg("Creator account does not match this market")]
+    CreatorMarketMismatch,    // 6028
 }
