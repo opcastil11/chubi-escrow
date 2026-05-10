@@ -7,6 +7,7 @@ skip-lint = false
 
 [programs.devnet]
 chubi_escrow = "DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ"
+chubi_perp = "JBo8FAveHuB55ZXjSeBAQL8ekaEae1btnftdNaQsjz3u"
 
 [registry]
 url = "https://api.apr.dev"
