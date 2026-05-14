@@ -10,13 +10,27 @@ pub const PROTOCOL_FEE_BPS: u64 = 200;
 /// Creator commission on profit at exit: 0.5% (matches chubi-escrow).
 pub const CREATOR_FEE_BPS: u64 = 50;
 
-/// Minimum entry weight (0.3x). Late depositors get this floor.
-/// For perpetuals "late" is relative to the 1-year reference window — the
-/// curve still favors early conviction without ever reaching 0.
-pub const MIN_WEIGHT_FLOOR: u64 = 300_000;
+/// Minimum entry weight (0.9x). Late depositors get this floor.
+///
+/// The original 0.3x floor combined with the multiplicative exit formula
+/// (`amount × entry_weight / weighted_pools[side] × pools[side]`) meant a
+/// late depositor could lose up to ~70% of their principal on the spot to
+/// earlier holders on the same side — even with zero funding flow. Raising
+/// the floor to 0.9 caps that worst-case dilution at ~10%, which is a
+/// band-aid while a principal/funding split (see review §1, R3a) is
+/// designed. The curve still favors early conviction — early entrants get
+/// up to 1.0x and a larger share of funding — without bleeding principal.
+pub const MIN_WEIGHT_FLOOR: u64 = 900_000;
 
-/// Minimum deposit: 0.001 SOL = 1_000_000 lamports.
-pub const MIN_DEPOSIT_LAMPORTS: u64 = 1_000_000;
+/// Minimum deposit: 0.02 SOL = 20_000_000 lamports.
+///
+/// Sized to comfortably exceed the rent of a `PerpPositionState` account
+/// (~0.00165 SOL for ~115 bytes). With `exit_perpetual` auto-closing the
+/// position and refunding rent to the maker, the floor only needs to keep
+/// the deposit economically meaningful relative to overhead — 0.02 SOL is
+/// ~12× the position's rent, so even worst-case trip costs (deposit + exit
+/// signature fees + LUT) stay a small fraction of principal.
+pub const MIN_DEPOSIT_LAMPORTS: u64 = 20_000_000;
 
 /// Market ID maximum length.
 pub const MAX_MARKET_ID_LEN: usize = 64;

@@ -25,6 +25,7 @@ pub struct ExitPerpetual<'info> {
 
     #[account(
         mut,
+        close = maker,
         constraint = position.market == market.key() @ PerpError::PositionMarketMismatch,
         constraint = position.maker == maker.key() @ PerpError::NotYourPosition,
     )]
@@ -47,8 +48,9 @@ pub struct ExitPerpetual<'info> {
 
 pub fn handler(ctx: Context<ExitPerpetual>) -> Result<()> {
     let market = &mut ctx.accounts.market;
-    let position = &mut ctx.accounts.position;
-    require!(!position.exited, PerpError::AlreadyExited);
+    let position = &ctx.accounts.position;
+    // No AlreadyExited check needed: `close = maker` on the position account
+    // means a re-entry on the same PDA fails Anchor account deserialization.
 
     // Compute current fair value at the existing pool snapshot. Funding is
     // already baked into pools[] by prior crank_epochs.
@@ -82,6 +84,27 @@ pub fn handler(ctx: Context<ExitPerpetual>) -> Result<()> {
     let actual_payout = net_payout.min(available);
     require!(actual_payout > 0, PerpError::InsufficientVault);
 
+    // If the vault was short and we capped, scale gross + fees by the same
+    // ratio so pools[] and the fee accumulators stay consistent with what was
+    // actually moved. In a healthy vault `actual_payout == net_payout` and
+    // this branch is a no-op.
+    let (paid_gross, paid_protocol_fee, paid_creator_fee) = if actual_payout < net_payout {
+        let scale = actual_payout as u128;
+        let denom = net_payout as u128;
+        let g = (gross_value as u128)
+            .checked_mul(scale).ok_or(error!(PerpError::MathOverflow))?
+            .checked_div(denom).ok_or(error!(PerpError::MathOverflow))? as u64;
+        let pf = (protocol_fee as u128)
+            .checked_mul(scale).ok_or(error!(PerpError::MathOverflow))?
+            .checked_div(denom).ok_or(error!(PerpError::MathOverflow))? as u64;
+        let cf = (creator_fee as u128)
+            .checked_mul(scale).ok_or(error!(PerpError::MathOverflow))?
+            .checked_div(denom).ok_or(error!(PerpError::MathOverflow))? as u64;
+        (g, pf, cf)
+    } else {
+        (gross_value, protocol_fee, creator_fee)
+    };
+
     // Vault → maker.
     let market_key = market.key();
     let vault_seeds = &[
@@ -101,9 +124,11 @@ pub fn handler(ctx: Context<ExitPerpetual>) -> Result<()> {
         actual_payout,
     )?;
 
-    // Update market accounting.
+    // Update market accounting. Pool & fees use the scaled `paid_*` values so
+    // book-keeping always matches lamports actually moved. weighted_pools is
+    // decremented in full because the position is being closed regardless.
     let s = position.side as usize;
-    market.pools[s] = market.pools[s].saturating_sub(gross_value);
+    market.pools[s] = market.pools[s].saturating_sub(paid_gross);
     let weighted_contrib = (position.amount as u128)
         .checked_mul(position.entry_weight as u128).ok_or(error!(PerpError::MathOverflow))?;
     market.weighted_pools[s] = market.weighted_pools[s].saturating_sub(weighted_contrib);
@@ -111,26 +136,23 @@ pub fn handler(ctx: Context<ExitPerpetual>) -> Result<()> {
     market.total_exited = market.total_exited
         .checked_add(actual_payout).ok_or(error!(PerpError::MathOverflow))?;
     market.protocol_fee_collected = market.protocol_fee_collected
-        .checked_add(protocol_fee).ok_or(error!(PerpError::MathOverflow))?;
+        .checked_add(paid_protocol_fee).ok_or(error!(PerpError::MathOverflow))?;
 
     // Accumulate creator fee on side-car.
-    if creator_fee > 0 {
+    if paid_creator_fee > 0 {
         let creator_account = &mut ctx.accounts.creator_account;
         creator_account.fee_collected = creator_account.fee_collected
-            .checked_add(creator_fee).ok_or(error!(PerpError::MathOverflow))?;
+            .checked_add(paid_creator_fee).ok_or(error!(PerpError::MathOverflow))?;
     }
-
-    position.exited = true;
-    position.exit_payout = actual_payout;
 
     emit!(events::PerpExited {
         market_id: market.market_id.clone(),
         maker: position.maker,
         nonce: position.nonce,
-        gross_value,
+        gross_value: paid_gross,
         principal: position.amount,
-        protocol_fee,
-        creator_fee,
+        protocol_fee: paid_protocol_fee,
+        creator_fee: paid_creator_fee,
         net_payout: actual_payout,
     });
 

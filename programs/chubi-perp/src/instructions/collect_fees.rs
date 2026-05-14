@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use crate::errors::PerpError;
+use crate::events;
 use crate::state::*;
 
 #[derive(Accounts)]
@@ -33,7 +34,7 @@ pub struct CollectPerpFees<'info> {
 pub fn handler(ctx: Context<CollectPerpFees>) -> Result<()> {
     let market = &mut ctx.accounts.market;
     let amount = market.protocol_fee_collected;
-    require!(amount > 0, PerpError::NoCreatorFees);
+    require!(amount > 0, PerpError::NoProtocolFees);
 
     let vault_balance = ctx.accounts.vault.lamports();
     let rent = Rent::get()?;
@@ -63,6 +64,12 @@ pub fn handler(ctx: Context<CollectPerpFees>) -> Result<()> {
 
     market.protocol_fee_collected = market.protocol_fee_collected
         .checked_sub(actual).ok_or(error!(PerpError::MathOverflow))?;
+
+    emit!(events::PerpProtocolFeesCollected {
+        market_id: market.market_id.clone(),
+        recipient: ctx.accounts.recipient.key(),
+        amount: actual,
+    });
 
     Ok(())
 }

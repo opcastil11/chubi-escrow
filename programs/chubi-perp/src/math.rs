@@ -104,17 +104,17 @@ mod tests {
 
     #[test]
     fn weight_at_midpoint_is_quadratic() {
-        // half remaining → frac = 0.5 → frac^2 = 0.25 → weight = 0.3 + 0.7 * 0.25 = 0.475
+        // half remaining → frac = 0.5 → frac^2 = 0.25 → weight = 0.9 + 0.1 * 0.25 = 0.925
         let w = compute_entry_weight(REFERENCE_WINDOW_SECS / 2).unwrap();
-        assert_eq!(w, 475_000);
+        assert_eq!(w, 925_000);
     }
 
     #[test]
     fn weight_one_month_in() {
-        // 30d / 365d = 0.0822 elapsed → 0.9178 remaining → ~0.842^2 ≈ 0.842
-        // weight = 0.3 + 0.7 × 0.9178^2 = 0.3 + 0.7 × 0.842 = 0.889 → ~889_762
+        // 30d / 365d = 0.0822 elapsed → 0.9178 remaining → 0.9178^2 ≈ 0.8424
+        // weight = 0.9 + 0.1 × 0.8424 ≈ 0.9842 → ~984_240
         let w = compute_entry_weight(30 * 86_400).unwrap();
-        assert!(w > 880_000 && w < 900_000, "expected ~890k, got {}", w);
+        assert!(w > 980_000 && w < 990_000, "expected ~984k, got {}", w);
     }
 
     #[test]

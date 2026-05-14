@@ -52,3 +52,10 @@ pub struct PerpCreatorFeesClaimed {
     pub creator: Pubkey,
     pub amount: u64,
 }
+
+#[event]
+pub struct PerpProtocolFeesCollected {
+    pub market_id: String,
+    pub recipient: Pubkey,
+    pub amount: u64,
+}

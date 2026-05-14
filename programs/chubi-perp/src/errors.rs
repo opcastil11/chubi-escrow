@@ -8,7 +8,7 @@ pub enum PerpError {
     NotPerpetualAdmin,              // 6001
     #[msg("Invalid side index")]
     InvalidSide,                    // 6002
-    #[msg("Deposit below minimum (0.001 SOL)")]
+    #[msg("Deposit below minimum (0.02 SOL)")]
     DepositTooSmall,                // 6003
     #[msg("Position does not belong to this market")]
     PositionMarketMismatch,         // 6004
@@ -32,4 +32,6 @@ pub enum PerpError {
     NotCreator,                     // 6013
     #[msg("No creator fees available to claim")]
     NoCreatorFees,                  // 6014
+    #[msg("No protocol fees available to collect")]
+    NoProtocolFees,                 // 6015
 }
