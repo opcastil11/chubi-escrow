@@ -22,10 +22,11 @@ pub struct PerpDeposited {
 pub struct EpochCranked {
     pub market_id: String,
     pub winner_side: u8,           // side that received funding
-    pub funding_lamports: u64,     // lamports moved from loser → winner
+    pub funding_lamports: u64,     // lamports drained from loser pool (full amount)
     pub imbalance_bps: u64,        // pool imbalance, in bps (10_000 = full one-sided)
     pub cranker: Pubkey,
     pub timestamp: i64,
+    pub cranker_rebate: u64,       // lamports paid to cranker (subset of funding_lamports)
 }
 
 #[event]

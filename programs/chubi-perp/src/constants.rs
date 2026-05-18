@@ -54,6 +54,17 @@ pub const EPOCH_SECS: i64 = 3_600;
 /// (~1–1.5%/day, ~10%/week). Tunable via redeploy.
 pub const FUNDING_RATE_BPS: u64 = 10;
 
+/// Cranker rebate: fraction of each epoch's funding paid out to the caller of
+/// `crank_epoch`. Drains from the vault, not the winner pool — so the loser
+/// loses its full `funding` lamports, but the winner pool only receives
+/// `funding × (1 - rebate)`. The delta goes straight to whoever cranked.
+///
+/// 5% of e.g. a 60k-lamport funding on a 100-SOL market = 3k lamports — still
+/// below a 5k sig fee on tiny markets, but for any non-trivial pool the
+/// permissionless crank becomes self-sustaining. Removes the single-point-of-
+/// failure of "authority must keep cranking with its own SOL".
+pub const CRANKER_REBATE_BPS: u64 = 500;
+
 /// Wallets allowed to launch perpetual markets. Hardcoded — adding/removing
 /// requires a redeploy. Position 0 is the protocol authority; position 1 is
 /// the day-to-day admin wallet.
