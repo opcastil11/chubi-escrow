@@ -51,16 +51,17 @@ pub fn compute_funding(pools: &[u64; 2]) -> Result<(u8, u8, u64, u64)> {
         .checked_mul(BPS_SCALE as u128).ok_or(error!(PerpError::MathOverflow))?
         .checked_div(total as u128).ok_or(error!(PerpError::MathOverflow))? as u64;
 
-    // funding_bps = base * imbalance / BPS_SCALE
-    let scaled_bps = (FUNDING_RATE_BPS as u128)
-        .checked_mul(imbalance_bps as u128).ok_or(error!(PerpError::MathOverflow))?
-        .checked_div(BPS_SCALE as u128).ok_or(error!(PerpError::MathOverflow))? as u64;
-    if scaled_bps == 0 {
-        return err!(PerpError::NoFundingNeeded);
-    }
+    // funding = pools[loser] * FUNDING_RATE_BPS * imbalance / (BPS_SCALE^2).
+    // Single division at the end — the prior two-step form truncated `scaled_bps`
+    // to 0 whenever imbalance_bps < BPS_SCALE / FUNDING_RATE_BPS (≈1000 bps with
+    // current constants), producing a 10% dead zone where funding silently dropped
+    // to NoFundingNeeded instead of scaling continuously from 0.
+    let denom = (BPS_SCALE as u128)
+        .checked_mul(BPS_SCALE as u128).ok_or(error!(PerpError::MathOverflow))?;
     let funding = (pools[loser as usize] as u128)
-        .checked_mul(scaled_bps as u128).ok_or(error!(PerpError::MathOverflow))?
-        .checked_div(BPS_SCALE as u128).ok_or(error!(PerpError::MathOverflow))? as u64;
+        .checked_mul(FUNDING_RATE_BPS as u128).ok_or(error!(PerpError::MathOverflow))?
+        .checked_mul(imbalance_bps as u128).ok_or(error!(PerpError::MathOverflow))?
+        .checked_div(denom).ok_or(error!(PerpError::MathOverflow))? as u64;
     if funding == 0 {
         return err!(PerpError::NoFundingNeeded);
     }
@@ -130,15 +131,28 @@ mod tests {
 
     #[test]
     fn funding_lopsided_pays_winner() {
-        // 80/20 split, total 1000 lamports, base 10 bps, imbalance 6000 bps
-        // scaled_bps = 10 * 6000 / 10000 = 6 bps → funding = 200 * 6 / 10_000 = 0
-        // Need bigger amounts to see non-zero funding due to integer truncation.
+        // 80/20 split: imbalance 6000 bps. With fused math:
+        // funding = 20M * 10 * 6000 / (10000 * 10000) = 12_000 lamports.
         let (winner, loser, funding, imb) = compute_funding(&[80_000_000, 20_000_000]).unwrap();
         assert_eq!(winner, 0);
         assert_eq!(loser, 1);
-        assert_eq!(imb, 6_000); // (60M / 100M) * 10_000 = 6000 bps
-        // funding = 20M * (10 * 6000 / 10000) / 10000 = 20M * 6 / 10000 = 12_000
+        assert_eq!(imb, 6_000);
         assert_eq!(funding, 12_000);
+    }
+
+    #[test]
+    fn funding_no_dead_zone_below_10pct() {
+        // Real prod scenario (dante1-vs-leon): pools 18.1056 SOL vs 20.4038 SOL
+        // → 596 bps imbalance (5.96%). Pre-fix this returned NoFundingNeeded
+        // because scaled_bps = 10*596/10000 = 0. Post-fix it scales smoothly:
+        // funding = 18_105_600_000 * 10 * 596 / 100_000_000 = 1_079_093 lamports.
+        let pool_a: u64 = 18_105_600_000;
+        let pool_b: u64 = 20_403_800_000;
+        let (winner, loser, funding, imb) = compute_funding(&[pool_a, pool_b]).unwrap();
+        assert_eq!(winner, 1);
+        assert_eq!(loser, 0);
+        assert_eq!(imb, 596);
+        assert_eq!(funding, 1_079_093);
     }
 
     #[test]
