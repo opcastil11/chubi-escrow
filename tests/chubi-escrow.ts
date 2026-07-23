@@ -134,7 +134,7 @@ describe("chubi-escrow", () => {
     await program.methods
       // min_weight=0 → slippage guard disabled in tests (weight is whatever
       // the clock produces; tests are deterministic).
-      .deposit(side, new BN(amountLamports), new BN(0))
+      .deposit(side, new BN(amountLamports), new BN(0), new BN(nonce))
       .accounts({
         market: marketPDA,
         vault: vaultPDA,
@@ -196,6 +196,44 @@ describe("chubi-escrow", () => {
     // Check vault has SOL
     const vaultBalance = await provider.connection.getBalance(vaultPDA);
     expect(vaultBalance).to.equal(amount * 2);
+  });
+
+  // The whole point of moving the nonce from `market.position_count` to an
+  // instruction arg: two makers using the SAME nonce must not fight over one
+  // PDA, and one maker reusing a nonce must still be rejected.
+  it("lets different makers share a nonce, and blocks nonce reuse per maker", async () => {
+    const marketId = "test-nonce-" + Date.now();
+    const { marketPDA } = await createMarket(marketId);
+
+    const maker1 = await createFundedKeypair();
+    const maker2 = await createFundedKeypair();
+    const amount = 0.05 * LAMPORTS_PER_SOL;
+
+    // Same nonce (7), different wallets → two distinct positions.
+    const [p1, p2] = await Promise.all([
+      depositAs(marketId, maker1, 0, amount, 7),
+      depositAs(marketId, maker2, 1, amount, 7),
+    ]);
+    expect(p1.toBase58()).to.not.equal(p2.toBase58());
+
+    const market = await program.account.marketState.fetch(marketPDA);
+    expect(market.positionCount.toNumber()).to.equal(2);
+
+    const pos1 = await program.account.positionState.fetch(p1);
+    expect(pos1.nonce.toNumber()).to.equal(7);
+
+    // Same maker, same nonce → init fails.
+    try {
+      await depositAs(marketId, maker1, 0, amount, 7);
+      expect.fail("should have thrown");
+    } catch (e: any) {
+      expect(e.message).to.match(/already in use|AccountAlreadyInitialized|custom program error: 0x0/);
+    }
+
+    // Same maker, fresh nonce → fine.
+    const p3 = await depositAs(marketId, maker1, 0, amount, 8);
+    const pos3 = await program.account.positionState.fetch(p3);
+    expect(pos3.nonce.toNumber()).to.equal(8);
   });
 
   it("rejects deposit below minimum", async () => {

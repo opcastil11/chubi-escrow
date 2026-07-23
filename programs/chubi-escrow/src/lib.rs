@@ -7,6 +7,11 @@ pub mod instructions;
 pub mod math;
 pub mod state;
 
+// Serializes the money math into golden-vectors.json so the frontend's JS
+// mirror can be checked against the contract. Test-only; not compiled on-chain.
+#[cfg(test)]
+mod golden_vectors;
+
 use instructions::*;
 
 declare_id!("DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ");
@@ -35,11 +40,27 @@ pub mod chubi_escrow {
     }
 
     /// Deposit SOL into a market side. Entry weight computed on-chain.
+    ///
     /// `min_weight` is a slippage guard: revert if the computed entry weight
     /// (after any lockout / fraction_remaining drift) is below this value.
     /// Pass 0 to disable the guard.
-    pub fn deposit(ctx: Context<Deposit>, side: u8, amount: u64, min_weight: u64) -> Result<()> {
-        instructions::deposit::handler(ctx, side, amount, min_weight)
+    ///
+    /// `nonce` is chosen by the CLIENT and is the last seed of the position
+    /// PDA. It used to be the market-global `position_count`, which serialized
+    /// the whole market: two different makers who built their transactions
+    /// from the same counter read derived the same expected seed, so the
+    /// second one reverted with ConstraintSeeds. Because the seed also
+    /// contains `maker`, a client-chosen nonce can only collide with the SAME
+    /// maker reusing a nonce — concurrent deposits from different wallets are
+    /// now independent.
+    pub fn deposit(
+        ctx: Context<Deposit>,
+        side: u8,
+        amount: u64,
+        min_weight: u64,
+        nonce: u64,
+    ) -> Result<()> {
+        instructions::deposit::handler(ctx, side, amount, min_weight, nonce)
     }
 
     /// Permissionless resolution — anyone can call after market expires.

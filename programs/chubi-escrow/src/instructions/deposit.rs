@@ -7,6 +7,7 @@ use crate::math;
 use crate::state::*;
 
 #[derive(Accounts)]
+#[instruction(side: u8, amount: u64, min_weight: u64, nonce: u64)]
 pub struct Deposit<'info> {
     #[account(
         mut,
@@ -23,6 +24,11 @@ pub struct Deposit<'info> {
     )]
     pub vault: SystemAccount<'info>,
 
+    // Last seed is the CLIENT-supplied `nonce`, not `market.position_count`.
+    // The counter version made every concurrent depositor race for the same
+    // seed; since `maker` is already part of the seed, a client-chosen nonce
+    // isolates makers from each other. `init` still rejects a nonce the same
+    // maker already used on this market (AccountAlreadyInitialized).
     #[account(
         init,
         payer = maker,
@@ -31,7 +37,7 @@ pub struct Deposit<'info> {
             b"position",
             market.key().as_ref(),
             maker.key().as_ref(),
-            market.position_count.to_le_bytes().as_ref(),
+            nonce.to_le_bytes().as_ref(),
         ],
         bump,
     )]
@@ -43,7 +49,13 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Deposit>, side: u8, amount: u64, min_weight: u64) -> Result<()> {
+pub fn handler(
+    ctx: Context<Deposit>,
+    side: u8,
+    amount: u64,
+    min_weight: u64,
+    nonce: u64,
+) -> Result<()> {
     let market = &mut ctx.accounts.market;
     let now = Clock::get()?.unix_timestamp;
 
@@ -100,7 +112,10 @@ pub fn handler(ctx: Context<Deposit>, side: u8, amount: u64, min_weight: u64) ->
     position.side = side;
     position.amount = amount;
     position.payout_amount = 0;
-    position.nonce = market.position_count;
+    // Store the client nonce so claim/withdraw/refund/close (which look the
+    // position up by `market` + `maker`, not by re-deriving the seed) and the
+    // off-chain indexer can address this position unambiguously.
+    position.nonce = nonce;
     position.claimed = false;
     position.created_at = now;
     position.entry_weight = entry_weight;
