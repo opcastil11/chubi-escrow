@@ -70,3 +70,37 @@ pub struct BetCreatorFeesClaimed {
     pub creator: Pubkey,
     pub amount: u64,
 }
+
+// ─── Dispute layer ───────────────────────────────────────────────────────
+
+#[event]
+pub struct BetOutcomeProposed {
+    pub market_id: String,
+    /// 1-indexed proposed outcome.
+    pub winner: u8,
+    pub proposed_at: i64,
+    /// Seconds until it can be finalized if undisputed.
+    pub dispute_window: i64,
+    pub proposer: Pubkey,
+}
+
+#[event]
+pub struct BetDisputed {
+    pub market_id: String,
+    pub disputer: Pubkey,
+    pub bond: u64,
+    /// The outcome being challenged (1-indexed).
+    pub disputed_winner: u8,
+}
+
+#[event]
+pub struct BetDisputeResolved {
+    pub market_id: String,
+    /// Final winner after arbitration (1-indexed).
+    pub winner: u8,
+    /// True if the dispute was upheld (proposed outcome overturned).
+    pub upheld: bool,
+    /// Where the bond went and how much.
+    pub bond_returned_to: Pubkey,
+    pub bond_amount: u64,
+}

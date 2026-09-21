@@ -52,6 +52,7 @@ pub fn handler(
     num_sides: u8,
     fee_recipient: Pubkey,
     creator: Pubkey,
+    dispute_window: i64,
 ) -> Result<()> {
     require!(market_id.len() <= MAX_MARKET_ID_LEN, BetError::MarketIdTooLong);
     require!(
@@ -59,6 +60,10 @@ pub fn handler(
         BetError::InvalidDuration
     );
     require!(num_sides >= 2 && num_sides as usize <= MAX_SIDES, BetError::InvalidNumSides);
+    require!(
+        dispute_window >= 0 && dispute_window <= MAX_DISPUTE_WINDOW_SECS,
+        BetError::InvalidDisputeWindow
+    );
 
     let now = Clock::get()?.unix_timestamp;
     let market = &mut ctx.accounts.market;
@@ -80,6 +85,12 @@ pub fn handler(
     market.side_bet_counts = [0; MAX_SIDES];
     market.protocol_fee_collected = 0;
     market.fee_recipient = fee_recipient;
+    // Dispute layer — dormant when dispute_window == 0.
+    market.dispute_window = dispute_window;
+    market.proposed_winner = 0;
+    market.proposed_at = 0;
+    market.disputer = Pubkey::default();
+    market.dispute_bond = 0;
 
     // ── Seed the vault with its own rent-exempt minimum ──
     //

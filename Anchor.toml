@@ -9,6 +9,7 @@ skip-lint = false
 chubi_escrow = "DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ"
 chubi_perp = "JBo8FAveHuB55ZXjSeBAQL8ekaEae1btnftdNaQsjz3u"
 chubi_bet = "CnnSaPfCLBD5V3yaYeV1bwEhUyuymdietSMiCF7HYmm8"
+chubi_bet_spl = "4ZhafuH1tQwqD3u6Kxjt9U2eE3ewHGxuuAsjBySJbyya"
 
 [registry]
 url = "https://api.apr.dev"

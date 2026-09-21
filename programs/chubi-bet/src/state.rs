@@ -46,6 +46,32 @@ pub struct BetMarket {
     /// Protocol fees accrued in the vault, awaiting `collect_fees`.
     pub protocol_fee_collected: u64,
     pub fee_recipient: Pubkey,
+
+    // ── Optional dispute layer (real-money tier) ──────────────────────────
+    //
+    // A market with `dispute_window == 0` behaves exactly as before: the
+    // authority calls `resolve_market` and it settles immediately. When the
+    // window is non-zero, the authority instead `propose_outcome`s: the market
+    // enters `Proposed`, and settlement waits `dispute_window` seconds during
+    // which anyone can `dispute` by posting `DISPUTE_BOND` lamports. No dispute
+    // → anyone `finalize`s after the window (permissionless). A dispute → the
+    // authority arbitrates via `resolve_disputed`, which also decides the bond:
+    // upheld dispute returns it to the disputer, rejected dispute forfeits it to
+    // the fee recipient. This is the on-chain, bonded counterpart to the
+    // off-chain ResolverRouter window — a real economic cost to challenge, so a
+    // frivolous dispute is not free.
+    /// Seconds a proposed outcome must wait before it can be finalized. 0 keeps
+    /// the pre-dispute behavior (immediate `resolve_market`).
+    pub dispute_window: i64,
+    /// Winner proposed but not yet final (1-indexed; 0 = none proposed).
+    pub proposed_winner: u8,
+    /// When the current outcome was proposed (0 = none).
+    pub proposed_at: i64,
+    /// Who raised a dispute (Pubkey::default() = none). Their bond sits in the
+    /// vault until `resolve_disputed` returns or forfeits it.
+    pub disputer: Pubkey,
+    /// Bond posted with the active dispute, in lamports.
+    pub dispute_bond: u64,
 }
 
 // ─── Creator (side-car PDA) ────────────────────────────────────────────────
@@ -97,6 +123,12 @@ pub struct Bet {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
 pub enum BetStatus {
     Open,
+    /// An outcome has been proposed and is inside its dispute window. Betting
+    /// is closed; the market is not yet payable.
+    Proposed,
+    /// A proposed outcome was challenged with a bond; awaiting authority
+    /// arbitration via `resolve_disputed`.
+    Disputed,
     Resolved,
     Invalid,
 }

@@ -42,6 +42,8 @@ pub mod chubi_bet {
 
     /// Create a bet market with its vault and creator side-car.
     /// `creator = Pubkey::default()` for house markets that pay no commission.
+    /// `dispute_window` (seconds, 0 = none) enables the propose/dispute/finalize
+    /// flow; with 0 the market uses `resolve_market` and settles immediately.
     pub fn create_market(
         ctx: Context<CreateBetMarket>,
         market_id: String,
@@ -49,9 +51,10 @@ pub mod chubi_bet {
         num_sides: u8,
         fee_recipient: Pubkey,
         creator: Pubkey,
+        dispute_window: i64,
     ) -> Result<()> {
         instructions::create_market::handler(
-            ctx, market_id, close_duration, num_sides, fee_recipient, creator,
+            ctx, market_id, close_duration, num_sides, fee_recipient, creator, dispute_window,
         )
     }
 
@@ -78,6 +81,30 @@ pub mod chubi_bet {
     /// Authority (oracle) reports the winning outcome. 1-indexed.
     pub fn resolve_market(ctx: Context<ResolveBetMarket>, winner: u8) -> Result<()> {
         instructions::resolve_market::handler(ctx, winner)
+    }
+
+    // ── Dispute layer (markets created with dispute_window > 0) ──────────────
+
+    /// Authority proposes an outcome. The market enters `Proposed` and waits out
+    /// its dispute window before it can be finalized or arbitrated.
+    pub fn propose_outcome(ctx: Context<ProposeOutcome>, winner: u8) -> Result<()> {
+        instructions::dispute::propose_handler(ctx, winner)
+    }
+
+    /// Anyone challenges a proposed outcome inside the window by posting a bond.
+    pub fn dispute(ctx: Context<DisputeOutcome>) -> Result<()> {
+        instructions::dispute::dispute_handler(ctx)
+    }
+
+    /// Permissionless: settle an undisputed proposed outcome after the window.
+    pub fn finalize(ctx: Context<FinalizeOutcome>) -> Result<()> {
+        instructions::dispute::finalize_handler(ctx)
+    }
+
+    /// Authority arbitrates a disputed market and settles the bond in the same
+    /// call (returned to the disputer if upheld, forfeited to fees if rejected).
+    pub fn resolve_disputed(ctx: Context<ResolveDisputed>, winner: u8) -> Result<()> {
+        instructions::dispute::resolve_disputed_handler(ctx, winner)
     }
 
     /// Winner claims `stake / winner_pool * total_pool`, minus fees on profit.

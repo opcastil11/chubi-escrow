@@ -54,4 +54,16 @@ pub enum BetError {
     NoCreatorFees,            // 6024
     #[msg("Creator account does not match this market")]
     CreatorMarketMismatch,    // 6025
+    #[msg("Dispute window must be 0 to 7 days")]
+    InvalidDisputeWindow,     // 6026
+    #[msg("Market has no proposed outcome")]
+    NotProposed,              // 6027
+    #[msg("Dispute window has not elapsed yet")]
+    DisputeWindowOpen,        // 6028
+    #[msg("Dispute window has already closed")]
+    DisputeWindowClosed,      // 6029
+    #[msg("Market is not in dispute")]
+    NotDisputed,              // 6030
+    #[msg("Disputer account does not match the active dispute")]
+    DisputerMismatch,         // 6031
 }

@@ -25,3 +25,13 @@ pub const MAX_SIDES: usize = 6;
 /// Betting-window bounds (seconds): 10 minutes to 7 days.
 pub const MIN_DURATION_SECS: i64 = 600;
 pub const MAX_DURATION_SECS: i64 = 604_800;
+
+/// Bond required to raise a dispute, in lamports (0.1 SOL). High enough that a
+/// frivolous challenge has a real cost, low enough that a genuine one is
+/// affordable. Returned if the dispute is upheld, forfeited to the fee
+/// recipient if rejected.
+pub const DISPUTE_BOND: u64 = 100_000_000;
+
+/// Maximum dispute window (seconds): 7 days. A proposed outcome can't be held
+/// hostage indefinitely.
+pub const MAX_DISPUTE_WINDOW_SECS: i64 = 604_800;
