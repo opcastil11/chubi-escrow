@@ -12,7 +12,7 @@
 [![Tests](https://img.shields.io/badge/tests-29%20unit%20%2B%2016%20integration-b6fe08?style=flat-square)](#development)
 [![Status](https://img.shields.io/badge/status-not%20audited-orange?style=flat-square)](#security-notes)
 
-[**Watch demo →**](https://vimeo.com/1190750180?share=copy&fl=sv&fe=ci) · [**Website →**](https://chubi.fun) · [**Program on Solscan →**](https://solscan.io/account/DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ?cluster=devnet)
+[**Watch demo →**](https://vimeo.com/1190750180?share=copy&fl=sv&fe=ci) · [**Website →**](https://chubito.com) · [**Program on Solscan →**](https://solscan.io/account/DUigKbzHrJTdEmAstpisqV1cQT951kkHk4PdMB5i4BbJ?cluster=devnet)
 
 <a href="https://vimeo.com/1190750180?share=copy&fl=sv&fe=ci">
   <img src="assets/hero-yes-no.png" alt="Chubi conviction market — make your finances move" width="640"/>
@@ -181,6 +181,6 @@ No license file is present yet — **all rights reserved by default**. Contact t
 
 <img src="assets/chubi-isotype.png" alt="Chubi" width="64"/>
 
-**Built with conviction.** — [chubi.fun](https://chubi.fun)
+**Built with conviction.** — [chubito.com](https://chubito.com)
 
 </div>
